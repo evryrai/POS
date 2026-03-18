@@ -8,7 +8,6 @@
 - [ ] M4 - Backup/restore + QA gate + pilot
 
 ## 🚧 In Progress
-- [ ] M1.3 - Implement local auth (Owner/Kasir)
 - [ ] M1.4 - Implement CRUD master produk + validasi SKU unik
 - [ ] M1.5 - Sherlock QA gate untuk M1
 
@@ -19,3 +18,4 @@
 - [x] RTM initial mapping created
 - [x] M1.1 - Bootstrap Nuxt 3 + TypeScript + Tailwind + Nuxt UI
 - [x] M1.2 - Setup Prisma + SQLite schema awal (users, products, stock_movements, transactions, transaction_items)
+- [x] M1.3 - Implement local auth (Owner/Kasir) via API (bootstrap/login/logout/me)
