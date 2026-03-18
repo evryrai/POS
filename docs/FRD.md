@@ -32,7 +32,11 @@ Linked PRD: docs/PRD.md
 - E3: File restore invalid/corrupt → reject + pesan jelas.
 
 ## 4) Integration & Data
-- Local DB embedded (SQLite disarankan)
+- Local DB embedded: **SQLite**
+- ORM/Data access: **Prisma**
+- App framework: **Nuxt 3 + TypeScript**
+- State management: **Pinia**
+- Validation: **Zod**
 - No external API required for v1 core
 
 ## 5) Non-Functional

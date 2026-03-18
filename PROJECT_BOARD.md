@@ -8,7 +8,11 @@
 - [ ] M4 - Backup/restore + QA gate + pilot
 
 ## 🚧 In Progress
-- [ ] M1 - Auth + Master Produk + schema DB awal
+- [ ] M1.1 - Bootstrap Nuxt 3 + TypeScript + Tailwind + Nuxt UI
+- [ ] M1.2 - Setup Prisma + SQLite schema awal (users, products, stock_movements, transactions, transaction_items)
+- [ ] M1.3 - Implement local auth (Owner/Kasir)
+- [ ] M1.4 - Implement CRUD master produk + validasi SKU unik
+- [ ] M1.5 - Sherlock QA gate untuk M1
 
 ## ✅ Done
 - [x] Repo initialized

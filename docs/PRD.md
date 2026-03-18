@@ -59,3 +59,13 @@ Membangun POS sederhana untuk 1 toko/1 terminal yang mampu:
 - M2: POS Checkout + Stok otomatis
 - M3: Reporting + Adjustment + Audit trail
 - M4: Backup/Restore + QA gate + Pilot
+
+## 9. Technology Baseline (Approved)
+- Nuxt 3 + TypeScript
+- Nuxt UI + Tailwind CSS
+- Pinia (state)
+- SQLite + Prisma (local data)
+- Zod (validation)
+- CSV local export
+
+Reference: `docs/TDR-001-tech-stack.md`
