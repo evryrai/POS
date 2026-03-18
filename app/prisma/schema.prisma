@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum UserRole {
+  OWNER
+  CASHIER
+}
+
+enum PaymentMethod {
+  CASH
+  QRIS
+  E_WALLET
+}
+
+enum StockMovementType {
+  SALE
+  RESTOCK
+  ADJUSTMENT
+  VOID
+}
+
+model User {
+  id           String        @id @default(cuid())
+  username     String        @unique
+  passwordHash String
+  role         UserRole
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  transactions Transaction[]
+  movements    StockMovement[]
+}
+
+model Product {
+  id           String          @id @default(cuid())
+  sku          String          @unique
+  barcode      String?
+  name         String
+  category     String?
+  unit         String          @default("pcs")
+  costPrice    Decimal         @default(0)
+  sellPrice    Decimal
+  stockQty     Int             @default(0)
+  minStockQty  Int             @default(0)
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  items        TransactionItem[]
+  movements    StockMovement[]
+
+  @@index([name])
+  @@index([barcode])
+}
+
+model Transaction {
+  id             String            @id @default(cuid())
+  invoiceNumber  String            @unique
+  subtotal       Decimal
+  discountAmount Decimal           @default(0)
+  totalAmount    Decimal
+  paidAmount     Decimal
+  changeAmount   Decimal           @default(0)
+  paymentMethod  PaymentMethod
+  note           String?
+  createdAt      DateTime          @default(now())
+
+  cashierId      String
+  cashier        User              @relation(fields: [cashierId], references: [id])
+
+  items          TransactionItem[]
+  movements      StockMovement[]
+
+  @@index([createdAt])
+}
+
+model TransactionItem {
+  id            String       @id @default(cuid())
+  qty           Int
+  unitPrice     Decimal
+  lineSubtotal  Decimal
+
+  transactionId String
+  transaction   Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  productId     String
+  product       Product      @relation(fields: [productId], references: [id])
+
+  @@index([transactionId])
+  @@index([productId])
+}
+
+model StockMovement {
+  id            String            @id @default(cuid())
+  movementType  StockMovementType
+  qtyDelta      Int
+  qtyBefore     Int
+  qtyAfter      Int
+  reason        String?
+  createdAt     DateTime          @default(now())
+
+  productId     String
+  product       Product           @relation(fields: [productId], references: [id])
+
+  actorUserId   String?
+  actorUser     User?             @relation(fields: [actorUserId], references: [id])
+
+  transactionId String?
+  transaction   Transaction?      @relation(fields: [transactionId], references: [id])
+
+  @@index([productId, createdAt])
+  @@index([movementType])
+}
