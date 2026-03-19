@@ -18,6 +18,7 @@ Linked PRD: docs/PRD.md
 | FR-010 | Export CSV laporan | Should | Scope |
 | FR-011 | Backup lokal manual+harian | Must | Scope |
 | FR-012 | Restore data dari backup | Must | Scope |
+| FR-013 | UI checkout mendukung diskon, catatan transaksi, dan preview struk dasar | Must | Scope |
 
 ## 2) Main Flow
 1. Kasir login
