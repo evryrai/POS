@@ -12,10 +12,11 @@ const schema = z.object({
       })
     )
     .min(1),
-  paymentMethod: z.enum(['CASH', 'QRIS', 'E_WALLET']).default('CASH'),
+  paymentMethod: z.enum(['CASH', 'QRIS', 'E_WALLET', 'DEBT']).default('CASH'),
   paidAmount: z.coerce.number().min(0),
   discountAmount: z.coerce.number().min(0).default(0),
-  note: z.string().max(300).optional()
+  note: z.string().max(300).optional(),
+  customerId: z.string().optional().nullable()
 })
 
 function invoicePrefix() {
@@ -76,7 +77,20 @@ export default defineEventHandler(async (event) => {
   }
 
   const totalAmount = Math.max(0, subtotal - payload.discountAmount)
-  if (payload.paidAmount < totalAmount) {
+  
+  if (payload.paymentMethod === 'DEBT') {
+    if (!payload.customerId) {
+      throw createError({ statusCode: 400, statusMessage: 'Customer is required for Debt payment' })
+    }
+    const customer = await prisma.customer.findUnique({ where: { id: payload.customerId } })
+    if (!customer) {
+      throw createError({ statusCode: 404, statusMessage: 'Customer not found' })
+    }
+    const newDebt = Number(customer.totalDebt) + totalAmount
+    if (newDebt > Number(customer.debtLimit)) {
+      throw createError({ statusCode: 400, statusMessage: 'Transaction exceeds customer debt limit' })
+    }
+  } else if (payload.paidAmount < totalAmount) {
     throw createError({ statusCode: 400, statusMessage: 'Paid amount is lower than total amount' })
   }
 
@@ -94,11 +108,12 @@ export default defineEventHandler(async (event) => {
         subtotal,
         discountAmount: payload.discountAmount,
         totalAmount,
-        paidAmount: payload.paidAmount,
-        changeAmount: payload.paidAmount - totalAmount,
+        paidAmount: payload.paymentMethod === 'DEBT' ? 0 : payload.paidAmount,
+        changeAmount: payload.paymentMethod === 'DEBT' ? 0 : (payload.paidAmount - totalAmount),
         paymentMethod: payload.paymentMethod,
         note: payload.note,
         cashierId: session.userId,
+        customerId: payload.customerId || null,
         shiftId: activeShift?.id || null,
         items: {
           create: payload.items.map((line) => {
@@ -114,6 +129,14 @@ export default defineEventHandler(async (event) => {
       },
       include: { items: true }
     })
+
+    // Update Customer Debt if payment method is DEBT
+    if (payload.paymentMethod === 'DEBT' && payload.customerId) {
+      await tx.customer.update({
+        where: { id: payload.customerId },
+        data: { totalDebt: { increment: totalAmount } }
+      })
+    }
 
     for (const line of payload.items) {
       const product = productMap.get(line.productId)!
