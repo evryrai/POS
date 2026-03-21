@@ -125,144 +125,124 @@ async function checkout() {
 </script>
 
 <template>
-  <div class="screen">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">POS Toko Kelontong</p>
-        <h1>Cashier Workspace</h1>
-      </div>
-      <button class="ghost" @click="refresh">Refresh Products</button>
-    </header>
-
-    <main class="grid">
-      <section class="products card">
-        <div class="section-head">
-          <h2>Products</h2>
-          <input v-model="query" type="text" placeholder="Search product or SKU..." class="search" />
+  <div class="min-h-screen bg-slate-950 text-slate-100">
+    <div class="mx-auto max-w-7xl px-4 py-6 lg:px-6">
+      <header class="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 backdrop-blur lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-400">POS Toko Kelontong</p>
+          <h1 class="mt-1 text-2xl font-bold text-white">Cashier Workspace</h1>
+          <p class="mt-1 text-sm text-slate-400">Fast checkout flow with stock-safe cart handling.</p>
         </div>
+        <button class="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-700" @click="refresh">
+          Refresh Products
+        </button>
+      </header>
 
-        <div v-if="pending" class="state">Loading products...</div>
-        <div v-else-if="items.length === 0" class="state">No products found. Add product first from API.</div>
+      <main class="grid gap-4 lg:grid-cols-[1.55fr_1fr]">
+        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <h2 class="text-lg font-semibold text-white">Product Catalog</h2>
+            <input
+              v-model="query"
+              type="text"
+              placeholder="Search by product name or SKU..."
+              class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none ring-sky-500/40 placeholder:text-slate-500 focus:ring lg:w-80"
+            />
+          </div>
 
-        <div v-else class="product-list">
-          <button v-for="p in items" :key="p.id" class="product-item" @click="addToCart(p)">
-            <div>
-              <p class="name">{{ p.name }}</p>
-              <p class="meta">SKU: {{ p.sku }} · Stock: {{ p.stockQty }}</p>
+          <div v-if="pending" class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-400">Loading products...</div>
+          <div v-else-if="items.length === 0" class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-400">No products found.</div>
+
+          <div v-else class="grid max-h-[65vh] gap-2 overflow-auto pr-1">
+            <button
+              v-for="p in items"
+              :key="p.id"
+              class="group flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-3 py-3 text-left transition hover:border-sky-500/70 hover:bg-slate-900"
+              @click="addToCart(p)"
+            >
+              <div>
+                <p class="font-semibold text-slate-100 group-hover:text-white">{{ p.name }}</p>
+                <p class="text-xs text-slate-400">SKU {{ p.sku }} • Stock {{ p.stockQty }}</p>
+              </div>
+              <strong class="text-sm text-emerald-300">Rp {{ Number(p.sellPrice || 0).toLocaleString('id-ID') }}</strong>
+            </button>
+          </div>
+        </section>
+
+        <aside class="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-white">Cart</h2>
+            <span class="rounded-full border border-slate-700 px-2 py-1 text-xs text-slate-300">{{ cart.length }} lines</span>
+          </div>
+
+          <div v-if="cart.length === 0" class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-400">Cart is empty.</div>
+
+          <div v-else class="grid max-h-64 gap-2 overflow-auto pr-1">
+            <div v-for="item in cart" :key="item.id" class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
+              <div>
+                <p class="text-sm font-semibold text-slate-100">{{ item.name }}</p>
+                <p class="text-xs text-slate-400">Rp {{ item.price.toLocaleString('id-ID') }} × {{ item.qty }}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs hover:bg-slate-800" @click="decQty(item.id)">-</button>
+                <span class="w-6 text-center text-sm text-slate-200">{{ item.qty }}</span>
+                <button class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs hover:bg-slate-800" @click="incQty(item.id)">+</button>
+              </div>
             </div>
-            <strong>Rp {{ Number(p.sellPrice || 0).toLocaleString('id-ID') }}</strong>
-          </button>
-        </div>
-      </section>
+          </div>
 
-      <aside class="cart card">
-        <div class="section-head">
-          <h2>Cart</h2>
-          <span>{{ cart.length }} items</span>
-        </div>
+          <div class="mt-4 space-y-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
+            <div class="flex items-center justify-between text-sm"><span class="text-slate-400">Subtotal</span><strong>Rp {{ subtotal.toLocaleString('id-ID') }}</strong></div>
 
-        <div v-if="cart.length === 0" class="state">Cart is empty.</div>
-
-        <div v-else class="cart-list">
-          <div v-for="item in cart" :key="item.id" class="cart-item">
-            <div>
-              <p class="name">{{ item.name }}</p>
-              <p class="meta">Rp {{ item.price.toLocaleString('id-ID') }} x {{ item.qty }}</p>
+            <div class="grid grid-cols-3 items-center gap-2 text-sm">
+              <label class="text-slate-400">Discount</label>
+              <input v-model.number="discountAmount" type="number" min="0" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-slate-100 outline-none focus:ring-1 focus:ring-sky-500" />
             </div>
-            <div class="qty-actions">
-              <button class="ghost small" @click="decQty(item.id)">-</button>
-              <span>{{ item.qty }}</span>
-              <button class="ghost small" @click="incQty(item.id)">+</button>
+
+            <div class="flex items-center justify-between text-sm"><span class="text-slate-300">Total</span><strong class="text-base text-white">Rp {{ totalAmount.toLocaleString('id-ID') }}</strong></div>
+
+            <div class="grid grid-cols-3 items-center gap-2 text-sm">
+              <label class="text-slate-400">Payment</label>
+              <select v-model="paymentMethod" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-slate-100 outline-none focus:ring-1 focus:ring-sky-500">
+                <option value="CASH">Cash</option>
+                <option value="QRIS">QRIS</option>
+                <option value="E_WALLET">E-Wallet</option>
+              </select>
             </div>
-          </div>
-        </div>
 
-        <div class="checkout">
-          <div class="row"><span>Subtotal</span><strong>Rp {{ subtotal.toLocaleString('id-ID') }}</strong></div>
+            <div class="grid grid-cols-3 items-center gap-2 text-sm">
+              <label class="text-slate-400">Paid</label>
+              <input v-model.number="paidAmount" type="number" min="0" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-slate-100 outline-none focus:ring-1 focus:ring-sky-500" />
+            </div>
 
-          <div class="row form-row">
-            <span>Discount</span>
-            <input v-model.number="discountAmount" type="number" min="0" class="input" />
-          </div>
+            <div class="grid grid-cols-3 items-start gap-2 text-sm">
+              <label class="pt-1 text-slate-400">Note</label>
+              <input v-model="note" type="text" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-slate-100 outline-none placeholder:text-slate-500 focus:ring-1 focus:ring-sky-500" placeholder="Optional transaction note" />
+            </div>
 
-          <div class="row"><span>Total</span><strong>Rp {{ totalAmount.toLocaleString('id-ID') }}</strong></div>
+            <div class="flex items-center justify-between text-sm"><span class="text-slate-400">Change</span><strong class="text-emerald-300">Rp {{ changeAmount.toLocaleString('id-ID') }}</strong></div>
 
-          <div class="row form-row">
-            <span>Payment</span>
-            <select v-model="paymentMethod" class="select">
-              <option value="CASH">Cash</option>
-              <option value="QRIS">QRIS</option>
-              <option value="E_WALLET">E-Wallet</option>
-            </select>
-          </div>
+            <p v-if="checkoutError" class="rounded-lg border border-rose-900/60 bg-rose-950/40 px-2 py-1 text-xs text-rose-300">{{ checkoutError }}</p>
+            <p v-if="checkoutSuccess" class="rounded-lg border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 text-xs text-emerald-300">{{ checkoutSuccess }}</p>
 
-          <div class="row form-row">
-            <span>Paid</span>
-            <input v-model.number="paidAmount" type="number" min="0" class="input" />
+            <button
+              class="w-full rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+              :disabled="cart.length === 0 || checkoutBusy"
+              @click="checkout"
+            >
+              {{ checkoutBusy ? 'Processing...' : 'Complete Checkout' }}
+            </button>
           </div>
 
-          <div class="row form-row notes">
-            <span>Note</span>
-            <input v-model="note" type="text" class="input" placeholder="Optional transaction note" />
+          <div v-if="lastReceipt" class="mt-4 rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm">
+            <h3 class="mb-2 font-semibold text-sky-300">Receipt Preview</h3>
+            <p class="text-slate-300">Invoice: <span class="font-semibold text-white">{{ lastReceipt.invoiceNumber }}</span></p>
+            <p class="text-slate-300">Total: Rp {{ lastReceipt.totalAmount.toLocaleString('id-ID') }}</p>
+            <p class="text-slate-300">Paid: Rp {{ lastReceipt.paidAmount.toLocaleString('id-ID') }}</p>
+            <p class="text-slate-300">Change: Rp {{ lastReceipt.changeAmount.toLocaleString('id-ID') }}</p>
           </div>
-
-          <div class="row"><span>Change</span><strong>Rp {{ changeAmount.toLocaleString('id-ID') }}</strong></div>
-
-          <p v-if="checkoutError" class="error">{{ checkoutError }}</p>
-          <p v-if="checkoutSuccess" class="success">{{ checkoutSuccess }}</p>
-
-          <button class="primary" :disabled="cart.length === 0 || checkoutBusy" @click="checkout">
-            {{ checkoutBusy ? 'Processing...' : 'Complete Checkout' }}
-          </button>
-        </div>
-
-        <div v-if="lastReceipt" class="receipt">
-          <h3>Receipt Preview</h3>
-          <p>Invoice: <strong>{{ lastReceipt.invoiceNumber }}</strong></p>
-          <p>Total: Rp {{ lastReceipt.totalAmount.toLocaleString('id-ID') }}</p>
-          <p>Paid: Rp {{ lastReceipt.paidAmount.toLocaleString('id-ID') }}</p>
-          <p>Change: Rp {{ lastReceipt.changeAmount.toLocaleString('id-ID') }}</p>
-        </div>
-      </aside>
-    </main>
+        </aside>
+      </main>
+    </div>
   </div>
 </template>
-
-<style scoped>
-:root { color-scheme: dark; }
-.screen { min-height: 100vh; background: #0b1220; color: #e2e8f0; padding: 1rem; }
-.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-.eyebrow { color: #93c5fd; margin: 0; font-size: .85rem; }
-h1 { margin: .15rem 0 0; font-size: 1.4rem; }
-.grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 1rem; }
-.card { background: #111827; border: 1px solid #1f2937; border-radius: 14px; padding: 1rem; }
-.section-head { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: .75rem; }
-.search, .input, .select { width: 260px; border-radius: 10px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; padding: .55rem .7rem; }
-.product-list, .cart-list { display: flex; flex-direction: column; gap: .55rem; max-height: 45vh; overflow: auto; }
-.product-item { display: flex; justify-content: space-between; align-items: center; gap: .8rem; width: 100%; border: 1px solid #1f2937; border-radius: 12px; background: #0f172a; color: inherit; padding: .75rem; cursor: pointer; }
-.product-item:hover { border-color: #3b82f6; }
-.name { margin: 0; font-weight: 600; }
-.meta { margin: .2rem 0 0; font-size: .83rem; color: #94a3b8; }
-.state { color: #94a3b8; padding: 1rem 0; }
-.cart-item { display: flex; justify-content: space-between; align-items: center; border: 1px solid #1f2937; border-radius: 12px; padding: .65rem; }
-.qty-actions { display: flex; align-items: center; gap: .45rem; }
-button { border: none; border-radius: 10px; padding: .6rem .85rem; cursor: pointer; }
-.ghost { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; }
-.small { padding: .25rem .5rem; }
-.primary { background: #2563eb; color: #fff; width: 100%; margin-top: .75rem; }
-.primary:disabled { opacity: .5; cursor: not-allowed; }
-.checkout { border-top: 1px solid #1f2937; margin-top: .75rem; padding-top: .75rem; }
-.row { display: flex; justify-content: space-between; align-items: center; gap: .6rem; }
-.form-row { margin-top: .5rem; }
-.notes { align-items: flex-start; }
-.error { color: #fca5a5; margin: .6rem 0 0; font-size: .9rem; }
-.success { color: #86efac; margin: .6rem 0 0; font-size: .9rem; }
-.receipt { margin-top: .9rem; border-top: 1px dashed #334155; padding-top: .7rem; color: #cbd5e1; font-size: .9rem; }
-.receipt h3 { margin: 0 0 .5rem; font-size: 1rem; color: #93c5fd; }
-.receipt p { margin: .2rem 0; }
-@media (max-width: 960px) {
-  .grid { grid-template-columns: 1fr; }
-  .search, .input, .select { width: 100%; }
-  .section-head { flex-direction: column; align-items: stretch; }
-}
-</style>

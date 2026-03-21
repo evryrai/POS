@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '~/server/lib/prisma'
 import { requireAuth } from '~/server/lib/require-auth'
@@ -17,13 +18,30 @@ const schema = z.object({
   note: z.string().max(300).optional()
 })
 
-function invoiceNumber() {
+function invoicePrefix() {
   const now = new Date()
   const y = now.getUTCFullYear()
   const m = String(now.getUTCMonth() + 1).padStart(2, '0')
   const d = String(now.getUTCDate()).padStart(2, '0')
-  const rand = Math.random().toString(36).slice(2, 7).toUpperCase()
-  return `INV-${y}${m}${d}-${rand}`
+  const hh = String(now.getUTCHours()).padStart(2, '0')
+  const mm = String(now.getUTCMinutes()).padStart(2, '0')
+  return `INV-${y}${m}${d}-${hh}${mm}`
+}
+
+async function generateUniqueInvoiceNumber(tx: Prisma.TransactionClient) {
+  const prefix = invoicePrefix()
+
+  for (let i = 0; i < 10; i++) {
+    const suffix = Math.random().toString(36).slice(2, 6).toUpperCase()
+    const candidate = `${prefix}-${suffix}`
+    const exists = await tx.transaction.findUnique({ where: { invoiceNumber: candidate } })
+    if (!exists) return candidate
+  }
+
+  throw createError({
+    statusCode: 500,
+    statusMessage: 'Failed to generate unique invoice number. Please retry.'
+  })
 }
 
 export default defineEventHandler(async (event) => {
@@ -63,9 +81,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const result = await prisma.$transaction(async (tx) => {
+    const generatedInvoiceNumber = await generateUniqueInvoiceNumber(tx)
+
     const created = await tx.transaction.create({
       data: {
-        invoiceNumber: invoiceNumber(),
+        invoiceNumber: generatedInvoiceNumber,
         subtotal,
         discountAmount: payload.discountAmount,
         totalAmount,
