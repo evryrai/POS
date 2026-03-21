@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
 
 type ProductItem = {
   id: string
   sku: string
+  barcode: string | null
   name: string
   sellPrice: number | string
   stockQty: number
@@ -17,14 +18,16 @@ type CheckoutResponse = {
   totalAmount: number
   paidAmount: number
   changeAmount: number
+  cartItems?: CartItem[]
 }
 
 const query = ref('')
 const cart = ref<CartItem[]>([])
-const paymentMethod = ref<'CASH' | 'QRIS' | 'E_WALLET'>('CASH')
+const paymentMethod = ref<'CASH' | 'QRIS' | 'E_WALLET' | 'DEBT'>('CASH')
 const paidAmount = ref(0)
 const discountAmount = ref(0)
 const note = ref('')
+const selectedCustomerId = ref<string | null>(null)
 const checkoutBusy = ref(false)
 const checkoutError = ref('')
 const checkoutSuccess = ref('')
@@ -36,13 +39,29 @@ const { data, pending, refresh } = await useFetch('/api/products', {
   query: computed(() => ({ q: query.value, limit: 30, offset: 0 }))
 })
 
+const { data: customersData } = await useFetch('/api/customers', {
+  query: { limit: 100 }
+})
+
 const { data: recentTransactions, refresh: refreshRecent } = await useFetch('/api/transactions/recent')
 
 const items = computed<ProductItem[]>(() => data.value?.items ?? [])
+const customers = computed(() => customersData.value?.items ?? [])
 const stockMap = computed(() => new Map(items.value.map((p) => [p.id, Number(p.stockQty || 0)])))
 const subtotal = computed(() => cart.value.reduce((sum, item) => sum + item.price * item.qty, 0))
 const totalAmount = computed(() => Math.max(0, subtotal.value - discountAmount.value))
 const changeAmount = computed(() => Math.max(0, paidAmount.value - totalAmount.value))
+
+// Barcode Scanning Logic
+watch(data, (newData) => {
+  if (newData?.items?.length === 1 && query.value.trim() !== '') {
+    const product = newData.items[0]
+    if (product.barcode === query.value.trim() || product.sku === query.value.trim()) {
+      addToCart(product)
+      query.value = '' 
+    }
+  }
+})
 
 function getInCartQty(productId: string) {
   return cart.value.find((item) => item.id === productId)?.qty || 0
@@ -50,20 +69,17 @@ function getInCartQty(productId: string) {
 
 function addToCart(product: ProductItem) {
   checkoutError.value = ''
-
   const availableStock = Number(product.stockQty || 0)
   const inCart = getInCartQty(product.id)
   if (inCart >= availableStock) {
     checkoutError.value = `Stock limit reached for ${product.name} (available ${availableStock})`
     return
   }
-
   const existing = cart.value.find((item) => item.id === product.id)
   if (existing) {
     existing.qty += 1
     return
   }
-
   cart.value.push({
     id: product.id,
     name: product.name,
@@ -75,13 +91,11 @@ function addToCart(product: ProductItem) {
 function incQty(id: string) {
   const item = cart.value.find((x) => x.id === id)
   if (!item) return
-
   const availableStock = stockMap.value.get(id) ?? 0
   if (item.qty >= availableStock) {
     checkoutError.value = `Cannot exceed stock (${availableStock}) for ${item.name}`
     return
   }
-
   checkoutError.value = ''
   item.qty += 1
 }
@@ -101,6 +115,10 @@ async function checkout() {
   lastReceipt.value = null
 
   if (cart.value.length === 0) return
+  if (paymentMethod.value === 'DEBT' && !selectedCustomerId.value) {
+    checkoutError.value = 'Please select a customer for debt payment'
+    return
+  }
 
   checkoutBusy.value = true
   try {
@@ -111,16 +129,20 @@ async function checkout() {
         paymentMethod: paymentMethod.value,
         paidAmount: paidAmount.value,
         discountAmount: discountAmount.value,
-        note: note.value || undefined
+        note: note.value || undefined,
+        customerId: selectedCustomerId.value
       }
     })
 
     checkoutSuccess.value = `Success: ${res.invoiceNumber} · Change Rp ${res.changeAmount.toLocaleString('id-ID')}`
-    lastReceipt.value = res
+    const finalCartItems = [...cart.value]
+    lastReceipt.value = { ...res, cartItems: finalCartItems }
+    
     cart.value = []
     paidAmount.value = 0
     discountAmount.value = 0
     note.value = ''
+    selectedCustomerId.value = null
     await refresh()
     await refreshRecent()
   } catch (error: any) {
@@ -130,19 +152,20 @@ async function checkout() {
   }
 }
 
+function printReceipt() {
+  window.print()
+}
+
 function handleKeydown(e: KeyboardEvent) {
-  // Focus search: /
   if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
     e.preventDefault()
     searchInput.value?.focus()
   }
-  // Complete checkout: Ctrl+Enter or Cmd+Enter
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
     if (cart.value.length > 0 && !checkoutBusy.value) {
       checkout()
     }
   }
-  // Clear cart: Esc (only if not in input)
   if (e.key === 'Escape' && document.activeElement?.tagName !== 'INPUT') {
     cart.value = []
     checkoutSuccess.value = ''
@@ -161,21 +184,18 @@ onUnmounted(() => {
 
 <template>
   <div class="min-h-screen bg-slate-950 text-slate-100">
-    <div class="mx-auto max-w-7xl px-4 py-6 lg:px-6">
+    <div class="mx-auto max-w-7xl px-4 py-6 lg:px-6 no-print">
       <header class="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 backdrop-blur lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-400">POS Toko Kelontong</p>
           <h1 class="mt-1 text-2xl font-bold text-white">Cashier Workspace</h1>
-          <p class="mt-1 text-sm text-slate-400">Fast checkout flow with stock-safe cart handling.</p>
         </div>
         <div class="flex items-center gap-3">
           <div class="hidden text-right text-[10px] text-slate-500 lg:block">
-            <p>Shortcuts:</p>
-            <p><kbd class="rounded bg-slate-800 px-1 border border-slate-700">/</kbd> Search</p>
-            <p><kbd class="rounded bg-slate-800 px-1 border border-slate-700">Ctrl+Enter</kbd> Pay</p>
+            <p>Shortcuts: <kbd class="rounded bg-slate-800 px-1 border border-slate-700">/</kbd> Search • <kbd class="rounded bg-slate-800 px-1 border border-slate-700">Ctrl+Ent</kbd> Pay</p>
           </div>
-          <button class="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-700" @click="refresh">
-            Refresh Products
+          <button class="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-700" @click="refresh">
+            Refresh
           </button>
         </div>
       </header>
@@ -190,23 +210,21 @@ onUnmounted(() => {
                 ref="searchInput"
                 v-model="query"
                 type="text"
-                placeholder="Search (press / to focus)..."
-                class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none ring-sky-500/40 placeholder:text-slate-500 focus:ring lg:w-80"
+                placeholder="Search name/SKU/Barcode..."
+                class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none ring-sky-500/40 focus:ring lg:w-80"
               />
             </div>
 
-            <div v-if="pending" class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-400">Loading products...</div>
-            <div v-else-if="items.length === 0" class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-400">No products found.</div>
-
+            <div v-if="pending" class="text-center py-10 text-slate-400">Loading...</div>
             <div v-else class="grid max-h-[45vh] gap-2 overflow-auto pr-1">
               <button
                 v-for="p in items"
                 :key="p.id"
-                class="group flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-3 py-3 text-left transition hover:border-sky-500/70 hover:bg-slate-900"
+                class="group flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-3 py-3 text-left transition hover:border-sky-500/70"
                 @click="addToCart(p)"
               >
                 <div>
-                  <p class="font-semibold text-slate-100 group-hover:text-white">{{ p.name }}</p>
+                  <p class="font-semibold text-slate-100">{{ p.name }}</p>
                   <p class="text-xs text-slate-400">SKU {{ p.sku }} • Stock {{ p.stockQty }}</p>
                 </div>
                 <strong class="text-sm text-emerald-300">Rp {{ Number(p.sellPrice || 0).toLocaleString('id-ID') }}</strong>
@@ -216,101 +234,153 @@ onUnmounted(() => {
 
           <!-- Recent Activity -->
           <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-            <div class="mb-4 flex items-center justify-between">
-              <h2 class="text-lg font-semibold text-white">Recent Transactions</h2>
-              <button class="text-xs text-sky-400 hover:text-sky-300" @click="refreshRecent">Refresh</button>
-            </div>
-            
+            <h2 class="mb-4 text-lg font-semibold text-white">Recent Transactions</h2>
             <div class="grid max-h-48 gap-2 overflow-auto pr-1">
               <div v-for="trx in recentTransactions?.items" :key="trx.id" class="flex flex-col gap-1 rounded-xl border border-slate-800 bg-slate-950 p-3">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-semibold text-slate-300">{{ trx.invoiceNumber }}</span>
-                  <span class="text-xs font-bold text-emerald-400">Rp {{ Number(trx.totalAmount).toLocaleString('id-ID') }}</span>
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-semibold text-slate-300">{{ trx.invoiceNumber }}</span>
+                  <span class="font-bold text-emerald-400">Rp {{ Number(trx.totalAmount).toLocaleString('id-ID') }}</span>
                 </div>
-                <div class="flex items-center justify-between text-xs text-slate-500">
-                  <span>{{ new Date(trx.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) }} • {{ trx.paymentMethod }}</span>
+                <div class="flex items-center justify-between text-[10px] text-slate-500">
+                  <span>{{ new Date(trx.createdAt).toLocaleTimeString() }} • {{ trx.paymentMethod }}</span>
                   <span>{{ trx.items.length }} items</span>
                 </div>
               </div>
-              <div v-if="!recentTransactions?.items?.length" class="text-sm text-slate-500">No recent transactions.</div>
             </div>
           </section>
         </div>
 
         <aside class="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-          <div class="mb-3 flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-white">Cart</h2>
-            <span class="rounded-full border border-slate-700 px-2 py-1 text-xs text-slate-300">{{ cart.length }} lines</span>
-          </div>
-
+          <h2 class="text-lg font-semibold text-white mb-3">Cart</h2>
           <div v-if="cart.length === 0" class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-400">Cart is empty.</div>
-
-          <div v-else class="grid max-h-64 gap-2 overflow-auto pr-1">
+          <div v-else class="grid max-h-64 gap-2 overflow-auto pr-1 mb-4">
             <div v-for="item in cart" :key="item.id" class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
-              <div>
-                <p class="text-sm font-semibold text-slate-100">{{ item.name }}</p>
-                <p class="text-xs text-slate-400">Rp {{ item.price.toLocaleString('id-ID') }} × {{ item.qty }}</p>
+              <div class="text-xs">
+                <p class="font-semibold text-slate-100">{{ item.name }}</p>
+                <p class="text-slate-400">Rp {{ item.price.toLocaleString('id-ID') }} × {{ item.qty }}</p>
               </div>
               <div class="flex items-center gap-2">
-                <button class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs hover:bg-slate-800" @click="decQty(item.id)">-</button>
-                <span class="w-6 text-center text-sm text-slate-200">{{ item.qty }}</span>
-                <button class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs hover:bg-slate-800" @click="incQty(item.id)">+</button>
+                <button class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs" @click="decQty(item.id)">-</button>
+                <span class="w-4 text-center text-xs">{{ item.qty }}</span>
+                <button class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs" @click="incQty(item.id)">+</button>
               </div>
             </div>
           </div>
 
-          <div class="mt-4 space-y-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
-            <div class="flex items-center justify-between text-sm"><span class="text-slate-400">Subtotal</span><strong>Rp {{ subtotal.toLocaleString('id-ID') }}</strong></div>
-
-            <div class="grid grid-cols-3 items-center gap-2 text-sm">
-              <label class="text-slate-400">Discount</label>
-              <input v-model.number="discountAmount" type="number" min="0" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-slate-100 outline-none focus:ring-1 focus:ring-sky-500" />
+          <div class="space-y-2 rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs">
+            <div class="flex justify-between text-slate-400"><span>Subtotal</span><strong>Rp {{ subtotal.toLocaleString('id-ID') }}</strong></div>
+            <div class="grid grid-cols-3 items-center gap-2">
+              <label>Discount</label>
+              <input v-model.number="discountAmount" type="number" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1" />
             </div>
-
-            <div class="flex items-center justify-between text-sm"><span class="text-slate-300">Total</span><strong class="text-base text-white">Rp {{ totalAmount.toLocaleString('id-ID') }}</strong></div>
-
-            <div class="grid grid-cols-3 items-center gap-2 text-sm">
-              <label class="text-slate-400">Payment</label>
-              <select v-model="paymentMethod" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-slate-100 outline-none focus:ring-1 focus:ring-sky-500">
-                <option value="CASH">Cash</option>
-                <option value="QRIS">QRIS</option>
-                <option value="E_WALLET">E-Wallet</option>
+            <div class="flex justify-between text-white font-bold border-t border-slate-800 pt-2"><span>Total</span><span class="text-sm">Rp {{ totalAmount.toLocaleString('id-ID') }}</span></div>
+            
+            <div class="grid grid-cols-3 items-center gap-2 pt-2 border-t border-slate-800">
+              <label>Customer</label>
+              <select v-model="selectedCustomerId" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1">
+                <option :value="null">Guest (No Debt)</option>
+                <option v-for="c in customers" :key="c.id" :value="c.id">{{ c.name }} (Debt: {{ Number(c.totalDebt).toLocaleString('id-ID') }})</option>
               </select>
             </div>
 
-            <div class="grid grid-cols-3 items-center gap-2 text-sm">
-              <label class="text-slate-400">Paid</label>
-              <input v-model.number="paidAmount" type="number" min="0" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-slate-100 outline-none focus:ring-1 focus:ring-sky-500" />
+            <div class="grid grid-cols-3 items-center gap-2">
+              <label>Payment</label>
+              <select v-model="paymentMethod" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1">
+                <option value="CASH">Cash</option>
+                <option value="QRIS">QRIS</option>
+                <option value="E_WALLET">E-Wallet</option>
+                <option value="DEBT" :disabled="!selectedCustomerId">DEBT (Kasbon)</option>
+              </select>
             </div>
 
-            <div class="grid grid-cols-3 items-start gap-2 text-sm">
-              <label class="pt-1 text-slate-400">Note</label>
-              <input v-model="note" type="text" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-slate-100 outline-none placeholder:text-slate-500 focus:ring-1 focus:ring-sky-500" placeholder="Optional transaction note" />
+            <div v-if="paymentMethod !== 'DEBT'" class="grid grid-cols-3 items-center gap-2">
+              <label>Paid</label>
+              <input v-model.number="paidAmount" type="number" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1" />
             </div>
 
-            <div class="flex items-center justify-between text-sm"><span class="text-slate-400">Change</span><strong class="text-emerald-300">Rp {{ changeAmount.toLocaleString('id-ID') }}</strong></div>
+            <div class="grid grid-cols-3 items-center gap-2">
+              <label>Note</label>
+              <input v-model="note" type="text" class="col-span-2 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1" placeholder="Optional..." />
+            </div>
 
-            <p v-if="checkoutError" class="rounded-lg border border-rose-900/60 bg-rose-950/40 px-2 py-1 text-xs text-rose-300">{{ checkoutError }}</p>
-            <p v-if="checkoutSuccess" class="rounded-lg border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 text-xs text-emerald-300">{{ checkoutSuccess }}</p>
+            <div v-if="paymentMethod !== 'DEBT'" class="flex justify-between text-emerald-400 border-t border-slate-800 pt-2"><span>Change</span><strong>Rp {{ changeAmount.toLocaleString('id-ID') }}</strong></div>
+
+            <p v-if="checkoutError" class="text-rose-400 text-[10px]">{{ checkoutError }}</p>
+            <p v-if="checkoutSuccess" class="text-emerald-400 text-[10px]">{{ checkoutSuccess }}</p>
 
             <button
-              class="w-full rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+              class="w-full rounded-xl bg-sky-500 py-2 font-bold text-slate-950 transition hover:bg-sky-400 disabled:bg-slate-700"
               :disabled="cart.length === 0 || checkoutBusy"
               @click="checkout"
             >
-              {{ checkoutBusy ? 'Processing...' : 'Complete Checkout' }}
+              {{ checkoutBusy ? '...' : 'Complete Checkout' }}
             </button>
           </div>
 
-          <div v-if="lastReceipt" class="mt-4 rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm">
-            <h3 class="mb-2 font-semibold text-sky-300">Receipt Preview</h3>
-            <p class="text-slate-300">Invoice: <span class="font-semibold text-white">{{ lastReceipt.invoiceNumber }}</span></p>
-            <p class="text-slate-300">Total: Rp {{ lastReceipt.totalAmount.toLocaleString('id-ID') }}</p>
-            <p class="text-slate-300">Paid: Rp {{ lastReceipt.paidAmount.toLocaleString('id-ID') }}</p>
-            <p class="text-slate-300">Change: Rp {{ lastReceipt.changeAmount.toLocaleString('id-ID') }}</p>
+          <div v-if="lastReceipt" class="mt-4 rounded-xl border border-slate-800 bg-slate-950 p-3 text-[10px]">
+            <div class="flex justify-between items-center mb-1">
+              <h3 class="font-bold text-sky-300 uppercase">Receipt Preview</h3>
+              <button @click="printReceipt" class="underline text-slate-400">Print</button>
+            </div>
+            <p>Invoice: {{ lastReceipt.invoiceNumber }}</p>
+            <p>Total: Rp {{ lastReceipt.totalAmount.toLocaleString('id-ID') }}</p>
           </div>
         </aside>
       </main>
     </div>
+
+    <!-- Hidden Thermal Receipt -->
+    <div v-if="lastReceipt" class="print-only thermal-receipt">
+      <div class="text-center mb-4">
+        <h2 style="font-size: 16px; font-weight: bold;">TOKO KELONTONG</h2>
+        <p>Indra's Mart</p>
+      </div>
+      <div style="border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px;">
+        <p>Date: {{ new Date().toLocaleString() }}</p>
+        <p>Inv: {{ lastReceipt.invoiceNumber }}</p>
+      </div>
+      <div style="margin-bottom: 5px;">
+        <div v-for="item in lastReceipt.cartItems" :key="item.id" style="display: flex; justify-content: space-between;">
+          <span>{{ item.name }} x{{ item.qty }}</span>
+          <span>{{ (item.price * item.qty).toLocaleString() }}</span>
+        </div>
+      </div>
+      <div style="border-top: 1px dashed #000; pt: 5px;">
+        <div style="display: flex; justify-content: space-between; font-weight: bold;">
+          <span>TOTAL</span>
+          <span>{{ lastReceipt.totalAmount.toLocaleString() }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span>PAID</span>
+          <span>{{ (paymentMethod === 'DEBT' ? 0 : lastReceipt.paidAmount).toLocaleString() }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span>CHANGE</span>
+          <span>{{ (paymentMethod === 'DEBT' ? 0 : lastReceipt.changeAmount).toLocaleString() }}</span>
+        </div>
+        <div v-if="paymentMethod === 'DEBT'" style="text-align: center; margin-top: 5px; font-weight: bold;">PAYMENT: DEBT (KASBON)</div>
+      </div>
+      <div style="text-align: center; margin-top: 15px;">
+        <p>Thank you for shopping!</p>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+@media print {
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  body { background: white !important; color: black !important; }
+}
+.print-only { display: none; }
+.thermal-receipt {
+  width: 58mm;
+  padding: 5mm;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12px;
+  line-height: 1.2;
+  color: black;
+  background: white;
+}
+</style>

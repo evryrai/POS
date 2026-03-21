@@ -15,6 +15,7 @@ enum PaymentMethod {
   CASH
   QRIS
   E_WALLET
+  DEBT
 }
 
 enum StockMovementType {
@@ -36,6 +37,19 @@ model User {
   transactions Transaction[]
   movements    StockMovement[]
   shifts       CashierShift[]
+}
+
+model Customer {
+  id           String        @id @default(cuid())
+  name         String
+  phone        String?       @unique
+  address      String?
+  totalDebt    Decimal       @default(0)
+  debtLimit    Decimal       @default(1000000) // Default 1jt limit
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  transactions Transaction[]
 }
 
 model CashierShift {
@@ -94,6 +108,9 @@ model Transaction {
 
   cashierId      String
   cashier        User              @relation(fields: [cashierId], references: [id])
+
+  customerId     String?
+  customer       Customer?         @relation(fields: [customerId], references: [id])
 
   shiftId        String?
   shift          CashierShift?     @relation(fields: [shiftId], references: [id])
