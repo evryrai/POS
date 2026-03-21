@@ -23,3 +23,4 @@
 - [x] M3 - Reporting + stock adjustment audit
 - [x] M4 - Backup/restore + QA gate + pilot
 - [x] M6 - Automated Testing Foundation (Vitest + logic unit tests)
+- [x] M7 - Integration & E2E Tests (Playwright setup + workflow tests)
