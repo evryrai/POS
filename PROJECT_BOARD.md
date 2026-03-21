@@ -6,7 +6,6 @@
 - [ ] M4 - Backup/restore + QA gate + pilot
 
 ## 🚧 In Progress
-- [ ] M3 - Reporting + stock adjustment audit
 
 ## ✅ Done
 - [x] Repo initialized
@@ -19,3 +18,4 @@
 - [x] M1.4 - Implement CRUD master produk + validasi SKU unik (API layer)
 - [x] M1.5 - Sherlock QA/security gate PASS + PR #5 merged to main
 - [x] M2 - POS checkout flow (UI + cart + payment + stock deduction)
+- [x] M3 - Reporting + stock adjustment audit
