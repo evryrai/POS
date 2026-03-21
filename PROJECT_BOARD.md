@@ -5,7 +5,7 @@
 ## 📋 Backlog (To Do)
 - [x] M5.1 - Shift Kasir (Buka/Tutup laci, modal awal, selisih uang fisik)
 - [x] M5.2 - PWA Integration (Installable app, offline manifest)
-- [ ] M5.3 - DB Restore Hardening (Safe lock/vacuum saat upload .db)
+- [x] M5.3 - DB Restore Hardening (Safe lock/backup saat upload .db)
 
 ## 🚧 In Progress
 
