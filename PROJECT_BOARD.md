@@ -3,9 +3,10 @@
 **Vision/Goal:** POS local-first untuk 1 toko/1 terminal agar transaksi, stok, dan laporan harian rapi dan cepat.
 
 ## 📋 Backlog (To Do)
-- [x] M5.1 - Shift Kasir (Buka/Tutup laci, modal awal, selisih uang fisik)
-- [x] M5.2 - PWA Integration (Installable app, offline manifest)
-- [x] M5.3 - DB Restore Hardening (Safe lock/backup saat upload .db)
+- [ ] M8.1 - Barcode Scanner Flow (Auto-focus & auto-add to cart)
+- [ ] M8.2 - Thermal Receipt Print (Web Print API setup)
+- [ ] M8.3 - Pro Business Features (Customer Debt/Kasbon, Multi-unit)
+- [ ] M8.4 - Desktop Build (.exe/.dmg generation via Tauri)
 
 ## 🚧 In Progress
 
@@ -22,5 +23,9 @@
 - [x] M2 - POS checkout flow (UI + cart + payment + stock deduction)
 - [x] M3 - Reporting + stock adjustment audit
 - [x] M4 - Backup/restore + QA gate + pilot
+- [x] M5.1 - Shift Kasir (Buka/Tutup laci, modal awal, selisih uang fisik)
+- [x] M5.2 - PWA Integration (Installable app, offline manifest)
+- [x] M5.3 - DB Restore Hardening (Safe lock/backup saat upload .db)
 - [x] M6 - Automated Testing Foundation (Vitest + logic unit tests)
 - [x] M7 - Integration & E2E Tests (Playwright setup + workflow tests)
+- [x] M8.0 - Tauri Desktop Foundation (Migration from Electron)
