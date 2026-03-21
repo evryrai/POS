@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
+
 type ProductItem = {
   id: string
   sku: string
@@ -28,9 +30,13 @@ const checkoutError = ref('')
 const checkoutSuccess = ref('')
 const lastReceipt = ref<CheckoutResponse | null>(null)
 
+const searchInput = ref<HTMLInputElement | null>(null)
+
 const { data, pending, refresh } = await useFetch('/api/products', {
   query: computed(() => ({ q: query.value, limit: 30, offset: 0 }))
 })
+
+const { data: recentTransactions, refresh: refreshRecent } = await useFetch('/api/transactions/recent')
 
 const items = computed<ProductItem[]>(() => data.value?.items ?? [])
 const stockMap = computed(() => new Map(items.value.map((p) => [p.id, Number(p.stockQty || 0)])))
@@ -116,12 +122,41 @@ async function checkout() {
     discountAmount.value = 0
     note.value = ''
     await refresh()
+    await refreshRecent()
   } catch (error: any) {
     checkoutError.value = error?.data?.statusMessage || error?.message || 'Checkout failed'
   } finally {
     checkoutBusy.value = false
   }
 }
+
+function handleKeydown(e: KeyboardEvent) {
+  // Focus search: /
+  if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
+    e.preventDefault()
+    searchInput.value?.focus()
+  }
+  // Complete checkout: Ctrl+Enter or Cmd+Enter
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    if (cart.value.length > 0 && !checkoutBusy.value) {
+      checkout()
+    }
+  }
+  // Clear cart: Esc (only if not in input)
+  if (e.key === 'Escape' && document.activeElement?.tagName !== 'INPUT') {
+    cart.value = []
+    checkoutSuccess.value = ''
+    checkoutError.value = ''
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
@@ -133,41 +168,74 @@ async function checkout() {
           <h1 class="mt-1 text-2xl font-bold text-white">Cashier Workspace</h1>
           <p class="mt-1 text-sm text-slate-400">Fast checkout flow with stock-safe cart handling.</p>
         </div>
-        <button class="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-700" @click="refresh">
-          Refresh Products
-        </button>
+        <div class="flex items-center gap-3">
+          <div class="hidden text-right text-[10px] text-slate-500 lg:block">
+            <p>Shortcuts:</p>
+            <p><kbd class="rounded bg-slate-800 px-1 border border-slate-700">/</kbd> Search</p>
+            <p><kbd class="rounded bg-slate-800 px-1 border border-slate-700">Ctrl+Enter</kbd> Pay</p>
+          </div>
+          <button class="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-700" @click="refresh">
+            Refresh Products
+          </button>
+        </div>
       </header>
 
       <main class="grid gap-4 lg:grid-cols-[1.55fr_1fr]">
-        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-          <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <h2 class="text-lg font-semibold text-white">Product Catalog</h2>
-            <input
-              v-model="query"
-              type="text"
-              placeholder="Search by product name or SKU..."
-              class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none ring-sky-500/40 placeholder:text-slate-500 focus:ring lg:w-80"
-            />
-          </div>
+        <div class="flex flex-col gap-4">
+          <!-- Catalog -->
+          <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <h2 class="text-lg font-semibold text-white">Product Catalog</h2>
+              <input
+                ref="searchInput"
+                v-model="query"
+                type="text"
+                placeholder="Search (press / to focus)..."
+                class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none ring-sky-500/40 placeholder:text-slate-500 focus:ring lg:w-80"
+              />
+            </div>
 
-          <div v-if="pending" class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-400">Loading products...</div>
-          <div v-else-if="items.length === 0" class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-400">No products found.</div>
+            <div v-if="pending" class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-400">Loading products...</div>
+            <div v-else-if="items.length === 0" class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-400">No products found.</div>
 
-          <div v-else class="grid max-h-[65vh] gap-2 overflow-auto pr-1">
-            <button
-              v-for="p in items"
-              :key="p.id"
-              class="group flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-3 py-3 text-left transition hover:border-sky-500/70 hover:bg-slate-900"
-              @click="addToCart(p)"
-            >
-              <div>
-                <p class="font-semibold text-slate-100 group-hover:text-white">{{ p.name }}</p>
-                <p class="text-xs text-slate-400">SKU {{ p.sku }} • Stock {{ p.stockQty }}</p>
+            <div v-else class="grid max-h-[45vh] gap-2 overflow-auto pr-1">
+              <button
+                v-for="p in items"
+                :key="p.id"
+                class="group flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-3 py-3 text-left transition hover:border-sky-500/70 hover:bg-slate-900"
+                @click="addToCart(p)"
+              >
+                <div>
+                  <p class="font-semibold text-slate-100 group-hover:text-white">{{ p.name }}</p>
+                  <p class="text-xs text-slate-400">SKU {{ p.sku }} • Stock {{ p.stockQty }}</p>
+                </div>
+                <strong class="text-sm text-emerald-300">Rp {{ Number(p.sellPrice || 0).toLocaleString('id-ID') }}</strong>
+              </button>
+            </div>
+          </section>
+
+          <!-- Recent Activity -->
+          <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <div class="mb-4 flex items-center justify-between">
+              <h2 class="text-lg font-semibold text-white">Recent Transactions</h2>
+              <button class="text-xs text-sky-400 hover:text-sky-300" @click="refreshRecent">Refresh</button>
+            </div>
+            
+            <div class="grid max-h-48 gap-2 overflow-auto pr-1">
+              <div v-for="trx in recentTransactions?.items" :key="trx.id" class="flex flex-col gap-1 rounded-xl border border-slate-800 bg-slate-950 p-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-slate-300">{{ trx.invoiceNumber }}</span>
+                  <span class="text-xs font-bold text-emerald-400">Rp {{ Number(trx.totalAmount).toLocaleString('id-ID') }}</span>
+                </div>
+                <div class="flex items-center justify-between text-xs text-slate-500">
+                  <span>{{ new Date(trx.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) }} • {{ trx.paymentMethod }}</span>
+                  <span>{{ trx.items.length }} items</span>
+                </div>
               </div>
-              <strong class="text-sm text-emerald-300">Rp {{ Number(p.sellPrice || 0).toLocaleString('id-ID') }}</strong>
-            </button>
-          </div>
-        </section>
+              <div v-if="!recentTransactions?.items?.length" class="text-sm text-slate-500">No recent transactions.</div>
+            </div>
+          </section>
+        </div>
 
         <aside class="rounded-2xl border border-slate-800 bg-slate-900 p-4">
           <div class="mb-3 flex items-center justify-between">
