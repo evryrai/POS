@@ -22,3 +22,4 @@
 - [x] M2 - POS checkout flow (UI + cart + payment + stock deduction)
 - [x] M3 - Reporting + stock adjustment audit
 - [x] M4 - Backup/restore + QA gate + pilot
+- [x] M6 - Automated Testing Foundation (Vitest + logic unit tests)
