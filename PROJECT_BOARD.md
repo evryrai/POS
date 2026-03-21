@@ -28,4 +28,3 @@
 - [x] M5.3 - DB Restore Hardening (Safe lock/backup saat upload .db)
 - [x] M6 - Automated Testing Foundation (Vitest + logic unit tests)
 - [x] M7 - Integration & E2E Tests (Playwright setup + workflow tests)
-- [x] M8.0 - Tauri Desktop Foundation (Migration from Electron)
