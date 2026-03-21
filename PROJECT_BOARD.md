@@ -3,7 +3,6 @@
 **Vision/Goal:** POS local-first untuk 1 toko/1 terminal agar transaksi, stok, dan laporan harian rapi dan cepat.
 
 ## 📋 Backlog (To Do)
-- [ ] M4 - Backup/restore + QA gate + pilot
 
 ## 🚧 In Progress
 
@@ -19,3 +18,4 @@
 - [x] M1.5 - Sherlock QA/security gate PASS + PR #5 merged to main
 - [x] M2 - POS checkout flow (UI + cart + payment + stock deduction)
 - [x] M3 - Reporting + stock adjustment audit
+- [x] M4 - Backup/restore + QA gate + pilot
