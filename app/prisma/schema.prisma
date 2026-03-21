@@ -35,6 +35,27 @@ model User {
 
   transactions Transaction[]
   movements    StockMovement[]
+  shifts       CashierShift[]
+}
+
+model CashierShift {
+  id              String        @id @default(cuid())
+  startTime       DateTime      @default(now())
+  endTime         DateTime?
+  status          String        @default("OPEN") // OPEN, CLOSED
+  
+  startingCash    Decimal       @default(0) // Modal laci awal
+  endingCash      Decimal?                  // Dihitung by sistem saat shift ditutup
+  actualCash      Decimal?                  // Fisik uang di laci yang diinput kasir
+  difference      Decimal?                  // Selisih (actual - ending)
+  note            String?
+  
+  cashierId       String
+  cashier         User          @relation(fields: [cashierId], references: [id])
+
+  transactions    Transaction[]
+
+  @@index([cashierId, status])
 }
 
 model Product {
@@ -73,6 +94,9 @@ model Transaction {
 
   cashierId      String
   cashier        User              @relation(fields: [cashierId], references: [id])
+
+  shiftId        String?
+  shift          CashierShift?     @relation(fields: [shiftId], references: [id])
 
   items          TransactionItem[]
   movements      StockMovement[]

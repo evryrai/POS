@@ -83,6 +83,11 @@ export default defineEventHandler(async (event) => {
   const result = await prisma.$transaction(async (tx) => {
     const generatedInvoiceNumber = await generateUniqueInvoiceNumber(tx)
 
+    // Find active shift for the cashier
+    const activeShift = await tx.cashierShift.findFirst({
+      where: { cashierId: session.userId, status: 'OPEN' }
+    })
+
     const created = await tx.transaction.create({
       data: {
         invoiceNumber: generatedInvoiceNumber,
@@ -94,6 +99,7 @@ export default defineEventHandler(async (event) => {
         paymentMethod: payload.paymentMethod,
         note: payload.note,
         cashierId: session.userId,
+        shiftId: activeShift?.id || null,
         items: {
           create: payload.items.map((line) => {
             const product = productMap.get(line.productId)!
