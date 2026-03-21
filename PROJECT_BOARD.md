@@ -3,11 +3,10 @@
 **Vision/Goal:** POS local-first untuk 1 toko/1 terminal agar transaksi, stok, dan laporan harian rapi dan cepat.
 
 ## 📋 Backlog (To Do)
-- [ ] M3 - Reporting + stock adjustment audit
 - [ ] M4 - Backup/restore + QA gate + pilot
 
 ## 🚧 In Progress
-- [ ] M2 - POS checkout flow (UI + cart + payment + stock deduction)
+- [ ] M3 - Reporting + stock adjustment audit
 
 ## ✅ Done
 - [x] Repo initialized
@@ -19,3 +18,4 @@
 - [x] M1.3 - Implement local auth (Owner/Kasir) via API (bootstrap/login/logout/me)
 - [x] M1.4 - Implement CRUD master produk + validasi SKU unik (API layer)
 - [x] M1.5 - Sherlock QA/security gate PASS + PR #5 merged to main
+- [x] M2 - POS checkout flow (UI + cart + payment + stock deduction)
